@@ -285,6 +285,59 @@ services:
       retries: 3
 
   # ============================================================================
+  # LLM GATEWAY LAYER (LiteLLM — Track 2)
+  # Agents call this gateway instead of provider APIs directly. Real provider
+  # keys live only here; agents receive LLM_GATEWAY_URL + LLM_GATEWAY_VIRTUAL_KEY
+  # via env injection from the orchestrator. See llm-gateway/DECISION.md.
+  # ============================================================================
+  llm-gateway:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: llm-gateway
+    restart: unless-stopped
+    depends_on:
+      phoenix-observability:
+        condition: service_healthy
+    ports:
+      - "4500:4000"   # Host 4500 (4000 is taken by nasiko-web); internal 4000
+    environment:
+      # Provider credentials — real keys live here, nowhere else.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Virtual key agents use; rotate by changing this value.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-nasiko-virtual}
+      # OTEL export to Phoenix (HTTP OTLP endpoint inside the compose network).
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix-observability:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_SERVICE_NAME: llm-gateway
+    volumes:
+      - ./llm-gateway/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    networks:
+      - app-network
+      - agents-net   # so every agent container can reach http://llm-gateway:4000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness').read()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mock OpenAI-compatible provider used for the provider-rotation
+  # integration test. Built from llm-gateway/mock-llm/.
+  mock-llm:
+    build:
+      context: ./llm-gateway/mock-llm
+    container_name: mock-llm
+    restart: unless-stopped
+    networks:
+      - app-network
+      - agents-net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health').read()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
   # OBSERVABILITY LAYER (Phoenix)
   # ============================================================================
   phoenix-observability:
@@ -395,6 +448,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      # Gateway config injected into every deployed agent. See agent_builder.py.
+      LLM_GATEWAY_URL: http://llm-gateway:4000/v1
+      LLM_GATEWAY_VIRTUAL_KEY: ${LITELLM_MASTER_KEY:-sk-nasiko-virtual}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./agents:/app/agents:ro

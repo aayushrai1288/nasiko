@@ -1,0 +1,24 @@
+{
+  "name": "Gateway Demo Agent",
+  "description": "Sample agent that calls the Nasiko platform LLM gateway. Carries no provider API keys in source — proves the gateway pattern works end-to-end.",
+  "url": "http://localhost:5000/",
+  "version": "1.0.0",
+  "default_input_modes": ["text"],
+  "default_output_modes": ["text"],
+  "capabilities": {
+    "streaming": true
+  },
+  "skills": [
+    {
+      "id": "gateway_demo",
+      "name": "Gateway Demo",
+      "description": "Answers general questions via the platform LLM gateway.",
+      "tags": ["demo", "gateway", "qa"],
+      "examples": [
+        "What is the capital of France?",
+        "Explain TCP in one sentence.",
+        "Summarize the Pythagorean theorem."
+      ]
+    }
+  ]
+}

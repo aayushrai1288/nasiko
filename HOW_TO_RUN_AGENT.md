@@ -112,7 +112,25 @@ Agents live in the `agents/` directory. Each agent needs:
 
 ### Configure the Agent's LLM
 
-For agents using OpenRouter, set the provider in `agents/<your-agent>/src/__main__.py` and in `agents/<your-agent>/docker-compose.yml`:
+**Preferred: use the platform LLM gateway. Do not hardcode provider keys in your agent.**
+
+The orchestrator injects `LLM_GATEWAY_URL` and `LLM_GATEWAY_VIRTUAL_KEY` into every deployed agent. Point your OpenAI-compatible client at the gateway:
+
+```python
+# agents/<your-agent>/src/...
+from openai import AsyncOpenAI
+client = AsyncOpenAI(
+    api_key=os.environ["LLM_GATEWAY_VIRTUAL_KEY"],
+    base_url=os.environ["LLM_GATEWAY_URL"],
+)
+response = await client.chat.completions.create(
+    model="nasiko-default", messages=[...]
+)
+```
+
+See the full guide at [`docs/llm-gateway.md`](docs/llm-gateway.md) and the reference agent at [`agents/a2a-gateway-demo/`](agents/a2a-gateway-demo/).
+
+**Legacy path (still supported, but discouraged):** set provider env vars directly in your agent's `docker-compose.yml`:
 
 ```yaml
 # agents/<your-agent>/docker-compose.yml
@@ -121,7 +139,7 @@ environment:
   - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
 ```
 
-The redis listener injects `OPENROUTER_API_KEY` automatically from its own environment (which gets it from `.nasiko-local.env`). You don't need to hardcode keys anywhere.
+The redis listener injects `OPENROUTER_API_KEY` automatically from its own environment (which gets it from `.nasiko-local.env`). Existing legacy agents (a2a-translator, a2a-github-agent, a2a-compliance-checker) use this path.
 
 ### Deploy via Redis Stream
 

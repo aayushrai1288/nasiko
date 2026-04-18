@@ -29,6 +29,11 @@ class Config:
     MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
     MINIMAX_BASE_URL = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.io/v1")
 
+    # LLM Gateway (Track 2) — injected into every agent at deploy time so
+    # agents don't need provider keys. See llm-gateway/DECISION.md.
+    LLM_GATEWAY_URL = os.getenv("LLM_GATEWAY_URL", "http://llm-gateway:4000/v1")
+    LLM_GATEWAY_VIRTUAL_KEY = os.getenv("LLM_GATEWAY_VIRTUAL_KEY", "sk-nasiko-virtual")
+
 
 # Legacy constants for backward compatibility
 DOCKER_NETWORK = Config.DOCKER_NETWORK

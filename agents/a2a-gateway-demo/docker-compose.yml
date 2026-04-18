@@ -1,0 +1,21 @@
+services:
+  a2a-gateway-demo:
+    build: .
+    container_name: a2a-gateway-demo
+    environment:
+      # No provider keys here — orchestrator injects LLM_GATEWAY_URL and
+      # LLM_GATEWAY_VIRTUAL_KEY at deploy time. See nasiko/orchestrator/
+      # agent_builder.py::_deploy_agent.
+      - LLM_GATEWAY_URL=${LLM_GATEWAY_URL:-http://llm-gateway:4000/v1}
+      - LLM_GATEWAY_VIRTUAL_KEY=${LLM_GATEWAY_VIRTUAL_KEY:-sk-nasiko-virtual}
+      - LLM_GATEWAY_MODEL=${LLM_GATEWAY_MODEL:-nasiko-default}
+    stdin_open: true
+    ports:
+      - "5000"
+    tty: true
+    networks:
+      - agents-net
+
+networks:
+  agents-net:
+    external: true

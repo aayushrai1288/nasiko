@@ -420,30 +420,47 @@ class AgentBuilder:
                 if DOCKER_NETWORK not in svc_def["networks"]:
                     svc_def["networks"].append(DOCKER_NETWORK)
 
-            # Update services to use pre-built instrumented image and inject API keys
+            # Update services to use pre-built instrumented image and inject API keys.
+            # LLM_GATEWAY_* are always injected — they're how agents reach the platform
+            # gateway without holding provider keys. See llm-gateway/DECISION.md.
             image_tag = f"{agent_folder_name}_instrumented"
-            api_key_env = {
+            injected_env = {
                 "OPENAI_API_KEY": Config.OPENAI_API_KEY,
                 "OPENROUTER_API_KEY": Config.OPENROUTER_API_KEY,
                 "MINIMAX_API_KEY": Config.MINIMAX_API_KEY,
+                "LLM_GATEWAY_URL": Config.LLM_GATEWAY_URL,
+                "LLM_GATEWAY_VIRTUAL_KEY": Config.LLM_GATEWAY_VIRTUAL_KEY,
             }
             for service_name, svc_def in compose_data.get("services", {}).items():
                 if service_name == agent_folder_name and "build" in svc_def:
                     svc_def.pop("build", None)
                     svc_def["image"] = image_tag
 
-                # Inject actual API key values directly (bypasses yaml/shell substitution issues)
+                # Ensure env is a list (docker-compose accepts either list or dict).
                 env = svc_def.get("environment", [])
-                if isinstance(env, list):
-                    new_env = []
-                    for item in env:
-                        if isinstance(item, str):
-                            key = item.split("=")[0]
-                            if key in api_key_env and api_key_env[key]:
-                                new_env.append(f"{key}={api_key_env[key]}")
-                                continue
-                        new_env.append(item)
-                    svc_def["environment"] = new_env
+                if isinstance(env, dict):
+                    env = [f"{k}={v}" for k, v in env.items()]
+
+                # Overwrite placeholders (e.g. "OPENAI_API_KEY=${OPENAI_API_KEY:-}")
+                # with actual values, bypassing yaml/shell substitution issues.
+                new_env = []
+                present_keys = set()
+                for item in env:
+                    if isinstance(item, str):
+                        key = item.split("=")[0]
+                        present_keys.add(key)
+                        if key in injected_env and injected_env[key]:
+                            new_env.append(f"{key}={injected_env[key]}")
+                            continue
+                    new_env.append(item)
+
+                # Ensure LLM_GATEWAY_* are present even if the agent's docker-compose.yml
+                # didn't declare them — every agent should be gateway-capable.
+                for key in ("LLM_GATEWAY_URL", "LLM_GATEWAY_VIRTUAL_KEY"):
+                    if key not in present_keys and injected_env[key]:
+                        new_env.append(f"{key}={injected_env[key]}")
+
+                svc_def["environment"] = new_env
 
             # Save updated compose
             with open(compose_path, "w") as f:
